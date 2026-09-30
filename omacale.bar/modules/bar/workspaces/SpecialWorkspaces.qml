@@ -238,7 +238,7 @@ Item {
               height: root.vertical ? implicitHeight : col.height
               topPadding: root.vertical ? -Tk.spacing.extraSmall / 2 : 0
               leftPadding: root.vertical ? 0 : -Tk.spacing.extraSmall / 2
-              readonly property string cls: modelData.wayland ? modelData.wayland.appId : (modelData.lastIpcObject || {}).class
+              readonly property string cls: (modelData.wayland ? modelData.wayland.appId : (modelData.lastIpcObject || {}).class) || ""
               readonly property var glyph: Sys.appGlyph(cls)
               text: Sys.appIcon(cls, "terminal")
               // The glyph keeps the icon's size; an app's own mark is drawn over it.

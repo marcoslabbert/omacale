@@ -10,6 +10,11 @@ import "../../.."
 // underneath as app-category icons, and a primary "active" pill that slides
 // between workspaces with a trailing edge.
 //
+// With Per monitor on (bar.workspaces.perMonitor), each screen lists only the
+// workspaces that exist on its own monitor, in number order, as Omarchy's
+// workspaces-per-monitor bar widget does; otherwise every screen shows the
+// same `shown` numbers, as Caelestia does.
+//
 // While a special workspace (Omarchy's scratchpad, Super+S) is open, the
 // normal list shrinks, fades and blurs behind a scrolling list of the special
 // workspaces (modules/bar/components/workspaces/Workspaces.qml, `specialWs`).
@@ -22,9 +27,29 @@ Rectangle {
   property bool vertical: true
   readonly property var monitor: Hyprland.monitorFor(screen)
   readonly property var cfg: Config.o.bar.workspaces
-  readonly property int shown: Math.max(1, cfg.shown)
+  readonly property bool perMonitor: !!cfg.perMonitor
   readonly property int activeId: monitor && monitor.activeWorkspace ? monitor.activeWorkspace.id : 1
-  readonly property int groupOffset: Math.floor((activeId - 1) / shown) * shown
+  // This monitor's workspaces (Per monitor): each workspace's monitor and the
+  // list both notify, so a workspace moving between screens moves here too.
+  // The active one always counts, even before Hyprland lists it.
+  readonly property var monitorIds: {
+    if (!perMonitor) return []
+    const mine = monitor ? monitor.name : ""
+    const out = []
+    const v = Hyprland.workspaces.values
+    for (let i = 0; i < v.length; i++) {
+      const w = v[i]
+      if (w.id <= 0 || !w.monitor || w.monitor.name !== mine) continue
+      out.push(w.id)
+    }
+    if (activeId > 0 && out.indexOf(activeId) < 0) out.push(activeId)
+    return out.sort((a, b) => a - b)
+  }
+  readonly property int shown: perMonitor ? Math.max(1, monitorIds.length) : Math.max(1, cfg.shown)
+  readonly property int groupOffset: perMonitor ? 0 : Math.floor((activeId - 1) / shown) * shown
+  // The workspace in slot i, in bar order.
+  function idAt(i) { return perMonitor ? (monitorIds[i] || activeId) : groupOffset + i + 1 }
+  readonly property int activeIndex: perMonitor ? Math.max(0, monitorIds.indexOf(activeId)) : activeId - 1 - groupOffset
   readonly property var focusedShapes: ["slanted", "oval", "pill", "triangle", "arrow", "diamond", "pentagon", "gem",
     "verySunny", "sunny", "cookie4", "cookie6", "cookie7", "cookie9", "cookie12", "clover4", "softBurst", "ghostish"]
 
@@ -53,7 +78,7 @@ Rectangle {
     if (!cfg.showWindows || cfg.maxWindowIcons <= 0) return 0
     let h = 0
     for (let i = 0; i < shown; i++) {
-      const o = wsObject(groupOffset + i + 1)
+      const o = wsObject(idAt(i))
       const n = Math.min(o && o.toplevels ? o.toplevels.values.length : 0, cfg.maxWindowIcons)
       if (n > 0) h += n * (vertical ? iconRef.implicitHeight : iconRef.implicitWidth) + Tk.padding.extraSmall
     }
@@ -95,6 +120,8 @@ Rectangle {
   function scroll(dy) {
     if (!Config.o.bar.scroll.workspaces) return
     if (inSpecial) Sys.toggleSpecial(specialName.slice("special:".length))
+    // Per monitor, the next workspace on this monitor, not the next number.
+    else if (perMonitor) Sys.workspace(dy > 0 ? "m-1" : "m+1")
     else if (dy < 0 || activeId > 1) Sys.workspace(dy > 0 ? "r-1" : "r+1")
   }
 
@@ -153,7 +180,7 @@ Rectangle {
         Item {
           id: ws
           required property int index
-          readonly property int wsId: root.groupOffset + index + 1
+          readonly property int wsId: root.idAt(index)
           readonly property var obj: root.wsObject(wsId)
           readonly property var toplevels: obj && obj.toplevels ? obj.toplevels.values : []
           readonly property bool occupied: toplevels.length > 0
@@ -214,7 +241,7 @@ Rectangle {
                 height: root.vertical ? implicitHeight : col.height
                 topPadding: root.vertical ? -Tk.spacing.extraSmall / 2 : 0
                 leftPadding: root.vertical ? 0 : -Tk.spacing.extraSmall / 2
-                readonly property string cls: modelData.wayland ? modelData.wayland.appId : (modelData.lastIpcObject || {}).class
+                readonly property string cls: (modelData.wayland ? modelData.wayland.appId : (modelData.lastIpcObject || {}).class) || ""
                 readonly property var glyph: Sys.appGlyph(cls)
                 text: Sys.appIcon(cls, "terminal")
                 // The glyph keeps the icon's size; an app's own mark is drawn over it.
@@ -272,7 +299,7 @@ Rectangle {
       list: list
       target: {
         root.listGen  // re-run once the delegates exist
-        return rep.count ? rep.itemAt(Math.max(0, Math.min(root.shown - 1, root.activeId - 1 - root.groupOffset))) : null
+        return rep.count ? rep.itemAt(Math.max(0, Math.min(root.shown - 1, root.activeIndex))) : null
       }
     }
 

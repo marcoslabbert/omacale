@@ -244,7 +244,7 @@ Item {
     // 1..9: that workspace of the group on show.
     if (e.text >= "1" && e.text <= "9" && e.text.length === 1) {
       const n = Number(e.text)
-      if (n <= workspaces.shown) root.scope.switchWorkspace(workspaces.groupOffset + n)
+      if (n <= workspaces.shown) root.scope.switchWorkspace(workspaces.idAt(n - 1))
       e.accepted = true
       return
     }

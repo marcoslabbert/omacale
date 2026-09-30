@@ -223,7 +223,8 @@ var subpages = {
   workspaces: {
     title: "Workspaces",
     rows: [
-      { type: "stepper", key: "bar.workspaces.shown", label: "Shown", subtext: "Number of workspaces displayed", from: 1, to: 10, step: 1 },
+      { type: "toggle", key: "bar.workspaces.perMonitor", label: "Per monitor", subtext: "Each screen lists only the workspaces on its own monitor, instead of the same numbers everywhere" },
+      { type: "stepper", key: "bar.workspaces.shown", label: "Shown", subtext: "Number of workspaces displayed (without Per monitor)", from: 1, to: 10, step: 1 },
       { type: "select", key: "bar.workspaces.display", label: "Display", subtext: "How each workspace is drawn", options: [
         { value: "shapes", label: "Shapes", icon: "category" },
         { value: "numbers", label: "Numbers", icon: "pin" }

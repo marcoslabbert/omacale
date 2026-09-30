@@ -109,6 +109,8 @@ QtObject {
         property bool power: true
         property JsonObject workspaces: JsonObject {
           property int shown: 5
+          // Only this monitor's workspaces on each screen's bar.
+          property bool perMonitor: false
           property string display: "shapes"
           property bool activeIndicator: true
           property bool activeTrail: true

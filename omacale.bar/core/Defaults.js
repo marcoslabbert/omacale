@@ -24,7 +24,7 @@ var values = {
     logo: true,
     logoIcon: "omarchy",   // see Logos.js
     power: true,
-    workspaces: { shown: 5, display: "shapes", activeIndicator: true, activeTrail: true, occupiedBg: false, showWindows: true, maxWindowIcons: 5, specialDisplay: "icons", specialShowWindows: true },
+    workspaces: { shown: 5, perMonitor: false, display: "shapes", activeIndicator: true, activeTrail: true, occupiedBg: false, showWindows: true, maxWindowIcons: 5, specialDisplay: "icons", specialShowWindows: true },
     activeWindow: { enabled: true, compact: false },
     tray: { enabled: true, background: false, recolour: false, compact: false, hiddenIcons: [] },
     plugins: { enabled: true, compact: false, unpinned: [], onTop: false },
