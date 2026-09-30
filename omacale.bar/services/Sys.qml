@@ -5,6 +5,7 @@ import Quickshell.Io
 import Quickshell.Hyprland
 import Quickshell.Services.Mpris
 import ".."
+import "../components/AppGlyphs.js" as AppGlyphs
 
 // System probes shared by the bar and drawers (network, resources, uptime,
 // weather). Polling only runs while something visible asks for it.
@@ -531,6 +532,10 @@ QtObject {
     const cats = e ? e.categories : null
     if (cats) for (const k in categoryIcons) if (cats.indexOf(k) !== -1) return categoryIcons[k]
     return fallback
+  }
+  // An app's own mark for the bar's window icons, or null for its category glyph.
+  function appGlyph(cls) {
+    return AppGlyphs.forClass(cls)
   }
   function networkIcon(s) {
     return ["signal_wifi_0_bar", "network_wifi_1_bar", "network_wifi_2_bar", "network_wifi_3_bar", "network_wifi"][Math.max(0, Math.min(4, Math.floor(s / 20)))]

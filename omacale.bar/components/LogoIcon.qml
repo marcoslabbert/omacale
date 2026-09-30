@@ -19,7 +19,9 @@ Item {
   property color topColour: Colours.m3primary
   property color bottomColour: Colours.m3onSurface
 
-  readonly property var opt: Logos.byId(value)
+  // A path option handed in directly (AppGlyphs.js) instead of a logo id.
+  property var option: null
+  readonly property var opt: option || Logos.byId(value)
   readonly property int px: Math.max(1, Math.round(size))
   // Same area for every logo, not the same longest side: a wide or tall
   // logo fitted into the square would look smaller than a square one. So it

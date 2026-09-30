@@ -238,8 +238,19 @@ Item {
               height: root.vertical ? implicitHeight : col.height
               topPadding: root.vertical ? -Tk.spacing.extraSmall / 2 : 0
               leftPadding: root.vertical ? 0 : -Tk.spacing.extraSmall / 2
-              text: Sys.appIcon(modelData.wayland ? modelData.wayland.appId : (modelData.lastIpcObject || {}).class, "terminal")
-              color: Colours.m3onSurfaceVariant
+              readonly property string cls: modelData.wayland ? modelData.wayland.appId : (modelData.lastIpcObject || {}).class
+              readonly property var glyph: Sys.appGlyph(cls)
+              text: Sys.appIcon(cls, "terminal")
+              // The glyph keeps the icon's size; an app's own mark is drawn over it.
+              color: glyph ? "transparent" : Colours.m3onSurfaceVariant
+              LogoIcon {
+                visible: !!parent.glyph
+                option: parent.glyph
+                size: Math.round(parent.size * 4 / 3 * 0.8)
+                colour: Colours.m3onSurfaceVariant
+                x: Math.round((parent.width + parent.leftPadding - width) / 2)
+                y: Math.round((parent.height + parent.topPadding - height) / 2)
+              }
               opacity: 0
               Component.onCompleted: opacity = 1
               Behavior on opacity { Anim { type: "effects" } }
