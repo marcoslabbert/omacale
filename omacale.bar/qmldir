@@ -6,6 +6,7 @@ ButtonRow 1.0 components/controls/ButtonRow.qml
 BarContent 1.0 modules/bar/BarContent.qml
 BarWidgetSlot 1.0 modules/bar/BarWidgetSlot.qml
 PluginPill 1.0 modules/bar/PluginPill.qml
+PluginStrip 1.0 modules/bar/PluginStrip.qml
 PluginBarFacade 1.0 modules/bar/PluginBarFacade.qml
 CAnim 1.0 components/CAnim.qml
 CircularProgress 1.0 components/controls/CircularProgress.qml

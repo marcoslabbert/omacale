@@ -286,7 +286,10 @@ var subpages = {
   },
   barPlugins: {
     title: "Bar plugins",
-    rows: [ { type: "custom", comp: "barPlugins" } ]
+    rows: [
+      { type: "toggle", key: "bar.plugins.onTop", label: "Along the top edge", subtext: "With the bar on a side, show your plugins in three pills on the top edge, where Omarchy's layout puts them. Left and right appear when you hover the edge; the center stays" },
+      { type: "custom", comp: "barPlugins" }
+    ]
   },
   status: {
     title: "Status icons",

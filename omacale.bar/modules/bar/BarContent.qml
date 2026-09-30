@@ -98,7 +98,6 @@ Item {
     return caps
   }
   readonly property real pluginsLen: pluginPills.reduce((n, p) => n + along(p), 0)
-  readonly property Item colItem: col
 
   // Popout lookup for a position `a` along the bar (Caelestia Bar.checkPopout).
   function popoutAt(a) {
@@ -1093,7 +1092,10 @@ Item {
 
   // Your 3rd-party bar widgets, in the three sections Omarchy's bar layout
   // puts them in (shell.json bar.layout left / center / right).
-  PluginPill { id: pluginPillL; bar: root; place: pluginPlaceL; pluginsList: root.host.pluginsLeft || []; capLen: root.pillCaps[0] }
-  PluginPill { id: pluginPillC; bar: root; place: pluginPlaceC; pluginsList: root.host.pluginsCenter || []; capLen: root.pillCaps[1] }
-  PluginPill { id: pluginPillR; bar: root; place: pluginPlaceR; pluginsList: root.host.pluginsRight || []; capLen: root.pillCaps[2] }
+  // Along the top edge instead (PluginStrip, Settings › Taskbar › Bar
+  // plugins), these stay empty.
+  readonly property bool pluginsHere: !scope.pluginsOnTop
+  PluginPill { id: pluginPillL; bar: root; x: col.x + pluginPlaceL.x; y: col.y + pluginPlaceL.y; pluginsList: root.pluginsHere ? root.host.pluginsLeft || [] : []; capLen: root.pillCaps[0] }
+  PluginPill { id: pluginPillC; bar: root; x: col.x + pluginPlaceC.x; y: col.y + pluginPlaceC.y; pluginsList: root.pluginsHere ? root.host.pluginsCenter || [] : []; capLen: root.pillCaps[1] }
+  PluginPill { id: pluginPillR; bar: root; x: col.x + pluginPlaceR.x; y: col.y + pluginPlaceR.y; pluginsList: root.pluginsHere ? root.host.pluginsRight || [] : []; capLen: root.pillCaps[2] }
 }

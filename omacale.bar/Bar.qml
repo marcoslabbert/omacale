@@ -42,7 +42,7 @@ Item {
   readonly property bool capsLock: Sys.capsLock
   readonly property bool numLock: Sys.numLock
 
-  readonly property string version: manifest && manifest.version ? manifest.version : "0.42.0"
+  readonly property string version: manifest && manifest.version ? manifest.version : "0.43.0"
 
   signal toggleRequested(string name, string screenName, string arg)
 
@@ -86,9 +86,11 @@ Item {
         var id = root.entryId(entry)
         if (!id || seen[id]) continue
         if (!reg.widgets[id]) continue
-        // Skip first-party (stock) widgets — only show user-installed ones.
+        // Omarchy's own widgets that Omacale draws itself are left out; the
+        // rest (the AI agents' usage, the system monitor, ...) are hosted
+        // with the user-installed ones.
         var meta = reg.metadataFor(id)
-        if (meta && meta.firstParty) continue
+        if (meta && meta.firstParty && root.nativeWidgets.indexOf(id) >= 0) continue
         seen[id] = true
         collected.push(entry)
         bySection[sections[s]].push(entry)
@@ -212,6 +214,14 @@ Item {
   // nothing: omarchy.monitor (no Omacale display panel yet), and the clock
   // and weather (SUPER+CTRL+ALT+D) -- the dashboard has its own binds.
   // `onBar`: only while that popout's icon is on the status bar.
+  // Omarchy bar widgets Omacale has its own version of (logo, workspaces,
+  // title, tray, clock and dashboard, status icons), so they are never hosted.
+  readonly property var nativeWidgets: [
+    "omarchy.menu", "omarchy.workspaces", "omarchy.active-window", "omarchy.tray",
+    "omarchy.clock", "omarchy.weather", "omarchy.indicators", "omarchy.keyboard-layout",
+    "omarchy.microphone", "omarchy.audio", "omarchy.bluetooth", "omarchy.network",
+    "omarchy.power", "omarchy.system-update", "omarchy.spacer"
+  ]
   readonly property var widgetTargets: ({
     "omarchy.network": { popout: "network" },
     "omarchy.bluetooth": { popout: "bluetooth" },
@@ -251,7 +261,10 @@ Item {
         && slot.activeItem && typeof slot.activeItem.open === "function")
       .sort((a, b) => {
         const pa = a.mapToItem(null, 0, 0), pb = b.mapToItem(null, 0, 0)
-        return vertical ? pa.y - pb.y : pa.x - pb.x
+        // Along the top edge (PluginStrip) the widgets are one row, and its
+        // hidden side pills sit above the screen: order by x alone.
+        if (!vertical || s.pluginsOnTop) return pa.x - pb.x
+        return pa.y - pb.y
       })
       .map(slot => slot.moduleName)
   }

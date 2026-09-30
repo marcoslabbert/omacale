@@ -45,6 +45,11 @@ Scope {
   // bottom-right corner they close once the cursor leaves (Caelestia Interactions).
   property bool utilShortcut: false
   property bool barHover: false
+  // The plugins along the top edge instead of in the bar (PluginStrip): only
+  // with the bar on a side, and not while it is hidden.
+  readonly property bool pluginsOnTop: !!cfg.bar.plugins.onTop && barVert && !barOff
+  // The pointer is on that edge: the left and right pills come out.
+  property bool stripHover: false
   // `omarchy toggle bar` (SUPER+SHIFT+SPACE) takes the bar column away and
   // nothing else: the frame, the reserved edges and every drawer stay, as in
   // Caelestia's non-persistent bar at rest. What points at the bar (its
@@ -214,7 +219,7 @@ Scope {
     if (list[next] !== popout) openPopoutKeys(list[next])
   }
 
-  Component.onCompleted: host.registerScope(scope)
+  Component.onCompleted: { host.registerScope(scope) }
   Component.onDestruction: host.unregisterScope(scope)
 
   function closeAll() {
@@ -321,8 +326,11 @@ Scope {
   }
   // What an edge reserves: the frame's border, or the bar's breadth on its own.
   function zoneFor(edge) {
+    if (edge === "top" && pluginsOnTop) return stripWidth
     return edge === barPos && cfg.bar.persistent && !barOff ? Tk.barWidth : Tk.border
   }
+  // The top edge holding the plugin pills: a pill and a border's margin.
+  readonly property real stripWidth: Tk.barInner + Math.max(Tk.padding.small, Tk.border)
   Reserve { anchors.left: true; exclusiveZone: scope.zoneFor("left") }
   Reserve { anchors.top: true; exclusiveZone: scope.zoneFor("top") }
   Reserve { anchors.right: true; exclusiveZone: scope.zoneFor("right") }
@@ -455,9 +463,13 @@ Scope {
     // The frame's breadth on the bar's edge (bw) and on the others (bt).
     readonly property real bw: (Tk.border + (Tk.barWidth - Tk.border) * barProg) * (1 - fs)
     readonly property real bt: Tk.border * (1 - fs)
+    // The top edge's breadth with the plugin pills on it (PluginStrip).
+    property real stripProg: scope.pluginsOnTop ? 1 : 0
+    Behavior on stripProg { Anim {} }
+    readonly property real pt: (Tk.border + (scope.stripWidth - Tk.border) * stripProg) * (1 - fs)
     // Panel area (Caelestia's Panels item)
     readonly property real ax: scope.barPos === "left" ? bw : bt
-    readonly property real ay: scope.barPos === "top" ? bw : bt
+    readonly property real ay: scope.barPos === "top" ? bw : pt
     readonly property real aw: width - ax - (scope.barPos === "right" ? bw : bt)
     readonly property real ah: height - ay - (scope.barPos === "bottom" ? bw : bt)
 
@@ -835,6 +847,10 @@ Scope {
       function inTopDash(x, y) {
         const visibleH = win.dh * (1 - win.dOff)
         const top = scope.barPos === "top" ? win.ay : 0
+        // Over the center plugin pill, the pointer is using its widgets:
+        // the dashboard opens from the edge beside it, and stays open over it.
+        const c = stripLoader.item ? stripLoader.item.pills[1] : null
+        if (c && c.anyShown && visibleH < 1 && y < win.ay && x >= win.ax + c.x && x <= win.ax + c.x + c.width) return false
         return y >= top && y < Math.max(win.ay + visibleH, top + 2) && x >= win.dx - Tk.borderRounding && x <= win.dx + win.dw + Tk.borderRounding
       }
       // The right-hand drawers' side: is a press or drag at x on it.
@@ -916,6 +932,10 @@ Scope {
       // Bar popouts and the collapsible groups (compact tray, plugin
       // overflow), for a pointer at window coordinates x, y.
       function updatePointer(x, y) {
+        // Anywhere on the top edge brings the side plugin pills out; a
+        // little past it too once they are, so they don't flicker.
+        scope.stripHover = scope.pluginsOnTop && x >= win.ax && x <= win.ax + win.aw
+          && y >= 0 && y < win.ay + (scope.stripHover ? Tk.borderRounding : 0)
         const onBar = barDepth(x, y) < win.bw && win.barProg > 0.5
         bar.hoverAt(barAlong(x, y), onBar)
 
@@ -943,7 +963,7 @@ Scope {
         id: pointerPoll
         interval: 350
         repeat: true
-        running: bar.groupsExpanded
+        running: bar.groupsExpanded || scope.stripHover
         onTriggered: if (!cursorProc.running) cursorProc.running = true
       }
       Process {
@@ -974,6 +994,25 @@ Scope {
         host: scope.host
         scope: scope
         keyMode: scope.barFocus
+      }
+
+      // The plugin pills along the top edge; built only when they are wanted,
+      // so a widget is never hosted twice (the bar's pills are empty then).
+      Loader {
+        id: stripLoader
+        active: scope.pluginsOnTop
+        x: win.ax
+        y: 0
+        width: win.aw
+        height: win.ay
+        opacity: Math.min(1 - win.fs, win.stripProg)
+        visible: opacity > 0
+        // screenScope: inside the strip, `scope` is its own property.
+        sourceComponent: PluginStrip {
+          host: screenScope.host
+          scope: screenScope
+          hovered: screenScope.stripHover
+        }
       }
 
       // ---- tooltip bubble for widgets

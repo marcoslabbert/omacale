@@ -133,6 +133,8 @@ QtObject {
         property JsonObject plugins: JsonObject {
           property bool enabled: true
           property bool compact: false
+          // Along the top edge (PluginStrip) rather than in the bar.
+          property bool onTop: false
           // Widgets kept behind the pill's chevron. Empty (the default) means
           // every widget is pinned, so nothing has to be seeded at startup --
           // a list of pinned ids would have to be written before the plugin

@@ -28,6 +28,11 @@ Item {
   required property var host
   // A slot in a column (left or right bar) or in a row (top or bottom bar).
   property bool vertical: true
+  // The edge the slot sits on ("" for the bar's own) and how far that edge
+  // reaches into the screen, for the widget's panel to open beside it.
+  property string edge: ""
+  property real edgeInset: Tk.barWidth
+  readonly property string edgePos: edge || host.position
   // One facade per slot, not per plugin id: a widget on each monitor gets its
   // own click targets and popout, and the facade dies with the widget.
   readonly property var bar: facade
@@ -318,17 +323,17 @@ Item {
   }
   readonly property real hostedCardX: {
     if (!cardSurfaceActive) return 0
-    var edge = Tk.barWidth + Tk.spacing.medium
-    if (host.position === "left") return edge
-    if (host.position === "right") return hostedScreenW - hostedCardW - edge
+    var edge = root.edgeInset + Tk.spacing.medium
+    if (root.edgePos === "left") return edge
+    if (root.edgePos === "right") return hostedScreenW - hostedCardW - edge
     return Math.round(Math.max(Tk.padding.medium, Math.min(hostedCentre.x - hostedCardW / 2, hostedScreenW - hostedCardW - Tk.padding.medium)))
   }
   readonly property real hostedCardY: {
     if (!cardSurfaceActive) return 0
     var cardH = Number(compatibilityCard.height) || 300
-    var edge = Tk.barWidth + Tk.spacing.medium
-    if (host.position === "top") return edge
-    if (host.position === "bottom") return hostedScreenH - cardH - edge
+    var edge = root.edgeInset + Tk.spacing.medium
+    if (root.edgePos === "top") return edge
+    if (root.edgePos === "bottom") return hostedScreenH - cardH - edge
     return Math.round(Math.max(Tk.padding.medium, Math.min(hostedCentre.y - cardH / 2, hostedScreenH - cardH - Tk.padding.medium)))
   }
 
@@ -346,7 +351,7 @@ Item {
     // The window's width on a column, its height on a row: KeyboardPanel takes
     // whichever is across the bar for the bar's own size.
     const across = compatibilityPanel ? Number(vertical ? compatibilityPanel.barW : compatibilityPanel.barH) || 0 : 0
-    return Math.round(Tk.barWidth + Tk.spacing.medium - across)
+    return Math.round(root.edgeInset + Tk.spacing.medium - across)
   }
   Binding {
     target: root.compatibilityPanel
@@ -439,6 +444,7 @@ Item {
     id: facade
     host: root.host
     moduleName: root.moduleName
+    edge: root.edge
   }
 
   // The fallback is deliberately owned by Omacale rather than inferred from

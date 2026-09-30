@@ -6,16 +6,21 @@ import "../.."
 // same spacing, one status-icon cell per widget (BarWidgetSlot scales each
 // widget's mark to the status icons' size). BarContent draws three, one per
 // section of Omarchy's bar layout (left, center, right), each on a
-// placeholder in the bar's column (`place`).
+// placeholder in the bar's column; PluginStrip draws them along the top
+// edge instead. Whoever holds the pill places it.
 //
 // Pinned widgets (Settings › Taskbar › Plugins) always show; the others
 // wait behind a chevron that hovering expands, like the compact tray.
 Rectangle {
   id: pill
 
-  required property Item bar       // BarContent
-  required property Item place     // its placeholder in the column
+  // BarContent or PluginStrip: its cfg, host, vertical and scrollBy().
+  required property Item bar
   required property var pluginsList
+  // The edge its widgets sit on when it isn't the bar's, and how far it
+  // reaches into the screen (BarWidgetSlot opens their panels beside it).
+  property string edge: ""
+  property real edgeInset: Tk.barWidth
   // Its length along the bar, from the shared space budget (BarContent.pillCaps).
   property real capLen: listLen
 
@@ -62,8 +67,6 @@ Rectangle {
 
   visible: bar.cfg.plugins.enabled !== false && pluginsList.length > 0
   opacity: anyShown ? 1 : 0
-  x: bar.colItem.x + place.x
-  y: bar.colItem.y + place.y
   // Scrolled down to a single cell, pinned widgets included, when even they
   // don't fit: the pill gives way before the clock and status icons do.
   readonly property real minLen: endPad * 2 + (vertical ? cellRef.implicitHeight : cellRef.implicitWidth)
@@ -118,6 +121,8 @@ Rectangle {
           entry: modelData
           host: pill.bar.host
           vertical: pill.vertical
+          edge: pill.edge
+          edgeInset: pill.edgeInset
           cellLen: pill.vertical ? cellRef.implicitHeight : cellRef.implicitWidth
           collapsed: !pinned && !pill.expanded
           onShownChanged: pill.recount()
