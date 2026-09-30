@@ -450,7 +450,9 @@ Item {
 
       Item {
         id: activeWin
-        visible: root.cfg.activeWindow.enabled
+        // With the plugins along the top edge the title is drawn there, left
+        // of the center pill (PluginStrip), and has no popout.
+        visible: root.cfg.activeWindow.enabled && !root.scope.pluginsOnTop
         readonly property var tl: Sys.activeToplevel
         readonly property string title: {
           const t = tl && tl.title ? tl.title : "Desktop"
@@ -1095,7 +1097,10 @@ Item {
   // Along the top edge instead (PluginStrip, Settings › Taskbar › Bar
   // plugins), these stay empty.
   readonly property bool pluginsHere: !scope.pluginsOnTop
-  PluginPill { id: pluginPillL; bar: root; x: col.x + pluginPlaceL.x; y: col.y + pluginPlaceL.y; pluginsList: root.pluginsHere ? root.host.pluginsLeft || [] : []; capLen: root.pillCaps[0] }
-  PluginPill { id: pluginPillC; bar: root; x: col.x + pluginPlaceC.x; y: col.y + pluginPlaceC.y; pluginsList: root.pluginsHere ? root.host.pluginsCenter || [] : []; capLen: root.pillCaps[1] }
-  PluginPill { id: pluginPillR; bar: root; x: col.x + pluginPlaceR.x; y: col.y + pluginPlaceR.y; pluginsList: root.pluginsHere ? root.host.pluginsRight || [] : []; capLen: root.pillCaps[2] }
+  // Dragging a widget between the pills; drawn over them.
+  property alias dragLayer: barDrag
+  PluginDragLayer { id: barDrag; anchors.fill: parent; z: 30; pills: root.pluginPills }
+  PluginPill { id: pluginPillL; bar: root; section: "left"; x: col.x + pluginPlaceL.x; y: col.y + pluginPlaceL.y; pluginsList: root.pluginsHere ? root.host.pluginsLeft || [] : []; capLen: root.pillCaps[0] }
+  PluginPill { id: pluginPillC; bar: root; section: "center"; x: col.x + pluginPlaceC.x; y: col.y + pluginPlaceC.y; pluginsList: root.pluginsHere ? root.host.pluginsCenter || [] : []; capLen: root.pillCaps[1] }
+  PluginPill { id: pluginPillR; bar: root; section: "right"; x: col.x + pluginPlaceR.x; y: col.y + pluginPlaceR.y; pluginsList: root.pluginsHere ? root.host.pluginsRight || [] : []; capLen: root.pillCaps[2] }
 }

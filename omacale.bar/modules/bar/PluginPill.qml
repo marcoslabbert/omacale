@@ -14,9 +14,16 @@ import "../.."
 Rectangle {
   id: pill
 
-  // BarContent or PluginStrip: its cfg, host, vertical and scrollBy().
+  // BarContent or PluginStrip: its cfg, host, vertical, scrollBy() and
+  // dragLayer (PluginDragLayer).
   required property Item bar
   required property var pluginsList
+  // Its section of Omarchy's bar layout, where a widget dropped on it goes.
+  required property string section
+  // While a widget is dragged, every pill takes drops, an empty one too.
+  readonly property var drag: bar.dragLayer || null
+  readonly property bool showEmpty: !!drag && drag.active
+  readonly property bool dropHover: !!drag && drag.active && drag.overPill === pill
   // The edge its widgets sit on when it isn't the bar's, and how far it
   // reaches into the screen (BarWidgetSlot opens their panels beside it).
   property string edge: ""
@@ -31,7 +38,7 @@ Rectangle {
   // The padding at each end of the list, along the bar.
   readonly property real endPad: Tk.padding.medium
   readonly property real listLen: vertical ? pluginCol.implicitHeight : pluginCol.implicitWidth
-  readonly property bool anyShown: listLen - endPad * 2 > 0.5
+  readonly property bool anyShown: listLen - endPad * 2 > 0.5 || showEmpty
   readonly property bool live: visible && anyShown
   property bool expanded: false
   onOverflowCountChanged: if (overflowCount === 0) expanded = false
@@ -65,7 +72,7 @@ Rectangle {
     : endPad * 2 + pinnedLen
       + (overflowCount > 0 ? (vertical ? overflowIcon.implicitHeight : overflowIcon.implicitWidth) : -pluginCol.gapPx)
 
-  visible: bar.cfg.plugins.enabled !== false && pluginsList.length > 0
+  visible: bar.cfg.plugins.enabled !== false && (pluginsList.length > 0 || showEmpty)
   opacity: anyShown ? 1 : 0
   // Scrolled down to a single cell, pinned widgets included, when even they
   // don't fit: the pill gives way before the clock and status icons do.
@@ -76,7 +83,8 @@ Rectangle {
   width: implicitWidth
   height: implicitHeight
   radius: (vertical ? width : height) / 2
-  color: Colours.m3surfaceContainer
+  color: dropHover ? Colours.m3secondaryContainer : Colours.m3surfaceContainer
+  Behavior on color { CAnim {} }
   clip: true
 
   Behavior on implicitHeight { enabled: pill.vertical; Anim {} }
@@ -130,6 +138,28 @@ Rectangle {
           onVisualLenChanged: pill.recount()
           Component.onCompleted: pill.recount()
           Component.onDestruction: pill.recount()
+
+          // Drag to another pill (PluginDragLayer). On the slot itself, the
+          // widget's parent, not over it: an item on top swallowed the
+          // clicks. Passive until the pointer passes the threshold, so a
+          // click still reaches the widget; then it takes the press over.
+          DragHandler {
+            id: grip
+            target: null
+            enabled: !!pill.drag
+            grabPermissions: PointerHandler.CanTakeOverFromAnything
+            onActiveChanged: {
+              if (active) {
+                const q = centroid.scenePosition
+                pill.drag.begin(grip.parent, pill, pill.drag.mapFromItem(null, q.x, q.y))
+              } else pill.drag.end()
+            }
+            onCentroidChanged: {
+              if (!active) return
+              const q = centroid.scenePosition
+              pill.drag.move(pill.drag.mapFromItem(null, q.x, q.y))
+            }
+          }
         }
       }
 

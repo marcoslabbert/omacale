@@ -50,6 +50,10 @@ Scope {
   readonly property bool pluginsOnTop: !!cfg.bar.plugins.onTop && barVert && !barOff
   // The pointer is on that edge: the left and right pills come out.
   property bool stripHover: false
+  // A plugin widget is being dragged between the pills (PluginDragLayer):
+  // the hover drawers keep still meanwhile.
+  readonly property bool pluginDragging: !!(stripLoader.item && stripLoader.item.dragLayer.active)
+    || !!(bar.dragLayer && bar.dragLayer.active)
   // `omarchy toggle bar` (SUPER+SHIFT+SPACE) takes the bar column away and
   // nothing else: the frame, the reserved edges and every drawer stay, as in
   // Caelestia's non-persistent bar at rest. What points at the bar (its
@@ -909,7 +913,7 @@ Scope {
           else if (dy > scope.cfg.launcher.dragThreshold) scope.launcher = false
         }
         // Dashboard: hover the top edge.
-        if (scope.cfg.dashboard.enabled) {
+        if (scope.cfg.dashboard.enabled && !scope.pluginDragging) {
           const showDash = scope.cfg.dashboard.showOnHover && inTopDash(x, y)
           if (!scope.dashShortcut) scope.dashboard = showDash
           // Caelestia hands a shortcut-opened dashboard to the pointer once it
@@ -920,7 +924,7 @@ Scope {
         }
 
         // Utilities: hover the bottom-right corner.
-        if (!scope.cfg.utilities || scope.cfg.utilities.enabled) {
+        if ((!scope.cfg.utilities || scope.cfg.utilities.enabled) && !scope.pluginDragging) {
           const showUtil = inBottomUtil(x, y)
           if (!scope.utilShortcut) scope.utilities = showUtil
           else if (showUtil && !drawerNav.cursor) scope.utilShortcut = false
@@ -1030,11 +1034,15 @@ Scope {
             return Qt.point(0, 0)
           }
         }
+        // A widget on the top edge (PluginStrip) gets it below, like a top bar's.
+        readonly property bool onStrip: scope.pluginsOnTop && targetPt.y < win.ay
+        readonly property bool alongX: !scope.barVert || onStrip
         // Beside the widget, away from the bar's edge.
-        x: scope.barVert
+        x: !alongX
           ? (scope.barPos === "left" ? Tk.barWidth + Tk.spacing.small : win.width - Tk.barWidth - Tk.spacing.small - width)
           : Math.max(Tk.padding.medium, Math.min(targetPt.x - width / 2, win.width - width - Tk.padding.medium))
-        y: scope.barVert
+        y: onStrip ? win.ay + Tk.spacing.small
+          : !alongX
           ? Math.max(Tk.padding.medium, Math.min(targetPt.y - height / 2, win.height - height - Tk.padding.medium))
           : (scope.barPos === "top" ? Tk.barWidth + Tk.spacing.small : win.height - Tk.barWidth - Tk.spacing.small - height)
         z: 999

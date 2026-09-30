@@ -48,7 +48,10 @@ Item {
     running: true
     onTriggered: strip.held = strip.anyOpen(pillL) || strip.anyOpen(pillR)
   }
-  readonly property bool revealed: hovered || held
+  // All three are out while a widget is dragged, so each can take it.
+  readonly property bool revealed: hovered || held || stripDrag.active
+  property alias dragLayer: stripDrag
+  PluginDragLayer { id: stripDrag; anchors.fill: parent; z: 30; pills: strip.pills }
   onHoveredChanged: if (hovered) held = false
 
   readonly property var pills: [pillL, pillC, pillR]
@@ -66,12 +69,14 @@ Item {
 
   SidePill {
     id: pillL
+    section: "left"
     x: strip.pad
     pluginsList: strip.host.pluginsLeft || []
   }
   PluginPill {
     id: pillC
     bar: strip
+    section: "center"
     edge: "top"
     edgeInset: strip.y + strip.height
     capLen: strip.centreCap
@@ -79,8 +84,48 @@ Item {
     y: Math.round((strip.height - height) / 2)
     pluginsList: strip.host.pluginsCenter || []
   }
+  // The active window's title, as the bar draws it on a row, just left of
+  // the center pill: with the plugins here the bar leaves it out. No popout.
+  Item {
+    id: winTitle
+    visible: strip.cfg.activeWindow.enabled
+    readonly property var tl: Sys.activeToplevel
+    readonly property string text: {
+      const t = tl && tl.title ? tl.title : "Desktop"
+      if (!strip.cfg.activeWindow.compact) return t
+      const parts = t.split(/\s+[\-\u2013\u2014]\s+/)
+      return parts.length > 1 ? parts[parts.length - 1].trim() : t
+    }
+    // From the left pill (out or not, so the title doesn't jump) to the center one.
+    readonly property real room: Math.max(0, pillC.x - Tk.spacing.large
+      - (pillL.pluginsList.length > 0 ? pillL.x + pillL.width + Tk.spacing.large : strip.pad))
+    width: Math.min(room, winIcon.implicitWidth + Tk.spacing.small + titleText.implicitWidth)
+    height: strip.height
+    x: Math.round(pillC.x - Tk.spacing.large - width)
+    clip: true
+    MIcon {
+      id: winIcon
+      y: Math.round((parent.height - height) / 2)
+      animate: true
+      text: Sys.appIcon(winTitle.tl && winTitle.tl.wayland ? winTitle.tl.wayland.appId : "", "desktop_windows")
+      color: Colours.m3primary
+    }
+    MText {
+      id: titleText
+      x: winIcon.width + Tk.spacing.small
+      y: Math.round((parent.height - height) / 2)
+      width: Math.max(0, winTitle.width - x)
+      text: winTitle.text
+      elide: Text.ElideRight
+      font.pointSize: Tk.font(13)
+      font.letterSpacing: 1.4
+      color: Colours.m3primary
+    }
+  }
+
   SidePill {
     id: pillR
+    section: "right"
     x: Math.round(strip.width - width - strip.pad)
     pluginsList: strip.host.pluginsRight || []
   }
