@@ -41,6 +41,7 @@ a lock screen that cannot load.
                          worse than one with the stock lock screen
 """
 
+import getpass
 import json
 import os
 import re
@@ -78,23 +79,59 @@ def run(cmd, **kwargs):
     return subprocess.run(cmd, text=True, capture_output=True, **kwargs)
 
 
-def clone_dir():
-    """The lock clone, whatever it is called: `omarchy plugin clone` names it
-    after the user, and a machine may have been set up under another name."""
+def clone_id():
+    """What `omarchy plugin clone omarchy.lock` names the clone."""
+    return "%s.lock" % (os.environ.get("USER") or getpass.getuser())
+
+
+def lock_clones():
+    """Every plugin that says it is a clone of Omarchy's lock. Third-party
+    lock plugins (lock screen designers, ...) say so too, to take over the
+    `lock` IPC, so being one says nothing about who owns it."""
     if not os.path.isdir(PLUGINS_DIR):
-        return None
+        return []
+    out = []
     for name in sorted(os.listdir(PLUGINS_DIR)):
         if name.startswith("."):
             continue
-        manifest = os.path.join(PLUGINS_DIR, name, "manifest.json")
-        try:
-            with open(manifest) as f:
-                data = json.load(f)
-        except (OSError, ValueError):
-            continue
-        if data.get("omarchy", {}).get("clonedFrom") == SOURCE_ID:
-            return os.path.join(PLUGINS_DIR, name)
+        data = handover.load_json(os.path.join(PLUGINS_DIR, name, "manifest.json"))
+        if data and (data.get("omarchy") or {}).get("clonedFrom") == SOURCE_ID:
+            out.append(os.path.join(PLUGINS_DIR, name))
+    return out
+
+
+def ours(path):
+    """A clone Omacale may rebuild: every sync deletes whatever stock doesn't
+    have, so only one carrying our wrapper, and never a checkout of someone's
+    project (a lock plugin installed from git clones Omarchy's lock too)."""
+    return not os.path.exists(os.path.join(path, ".git")) \
+        and view_state(path).startswith("omacale")
+
+
+def pristine(path):
+    """Straight out of `omarchy plugin clone`, nothing edited yet."""
+    return not os.path.exists(os.path.join(path, ".git")) \
+        and not handover.Plan(STOCK_DIR, path, handover.stock_tree(STOCK_DIR)).stale_files()
+
+
+def clone_dir():
+    """Omacale's lock clone: `omarchy plugin clone` names it after the user,
+    and a machine may have been set up under another name, so any clone that
+    carries our wrapper counts."""
+    own = os.path.join(PLUGINS_DIR, clone_id())
+    clones = lock_clones()
+    if own in clones and ours(own):
+        return own
+    for path in clones:
+        if ours(path):
+            return path
     return None
+
+
+def others():
+    """Lock clones that aren't Omacale's."""
+    mine = clone_dir()
+    return [path for path in lock_clones() if path != mine]
 
 
 def plugin_enabled(plugin_id):
@@ -238,14 +275,29 @@ def install(restart=False, heal=False):
     check_contract(service_qml, template_qml, stock_view_qml)
 
     target = clone_dir()
+    # Only one lock service can run. Another enabled lock plugin owns the
+    # lock, and rebuilding it would delete everything it has beyond stock.
+    for path in others():
+        plugin_id = os.path.basename(path)
+        if path != os.path.join(PLUGINS_DIR, clone_id()) and plugin_enabled(plugin_id):
+            fail(f"{plugin_id} is another lock plugin and it is enabled; "
+                 f"disable it (omarchy plugin disable {plugin_id}) to use Omacale's lock screen")
     if target is None:
-        proc = run(["omarchy-plugin-clone", SOURCE_ID])
-        if proc.returncode != 0:
-            fail(proc.stderr.strip() or "omarchy plugin clone failed")
-        target = clone_dir()
-        if target is None:
-            fail("the cloned lock plugin was not found after cloning")
-        print(f"cloned {SOURCE_ID} to {target}")
+        own = os.path.join(PLUGINS_DIR, clone_id())
+        if os.path.exists(own):
+            # Left by an earlier `omarchy plugin clone`: take it only if
+            # nothing in it has been edited.
+            if not pristine(own):
+                fail(f"{own} is a clone of {SOURCE_ID} with changes of its own; "
+                     "Omacale won't rewrite it. Move it away to use Omacale's lock screen")
+        else:
+            proc = run(["omarchy-plugin-clone", SOURCE_ID])
+            if proc.returncode != 0:
+                fail(proc.stderr.strip() or "omarchy plugin clone failed")
+            if not os.path.isdir(own):
+                fail(f"the cloned lock plugin was not found at {own} after cloning")
+            print(f"cloned {SOURCE_ID} to {own}")
+        target = own
 
     # Omarchy's plugin, verbatim: rebuilt every run so the clone follows
     # `omarchy update` instead of freezing at the version it was cloned from.

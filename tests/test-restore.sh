@@ -240,6 +240,8 @@ if [[ -d $real_omarchy/shell/plugins/notifications && -d $real_omarchy/shell/plu
   new_home
   fake="$H/omarchy"; mkdir -p "$fake/shell/plugins" "$H/bin"
   cp -r "$real_omarchy/shell/plugins/notifications" "$real_omarchy/shell/plugins/lock" "$fake/shell/plugins/"
+  # The upstream-removal case below needs a file to remove; stable 4.0.x has no poster.sh.
+  [[ -e $fake/shell/plugins/lock/poster.sh ]] || echo "# stand-in" > "$fake/shell/plugins/lock/poster.sh"
   plugins="$H/.config/omarchy/plugins"
   # The fake shell answers from files, so a case can make a plugin "broken".
   cat > "$H/bin/omarchy-shell" <<'SH'
@@ -343,6 +345,20 @@ print(','.join(m.stale_files('$lclone')))"; }
   rm -f "$H/restarted"
   hv python3 "$scripts/lock-screen" install --heal >/dev/null 2>&1
   check "nothing to repair, no restart"          unhealed
+  # A third-party lock plugin says it is a clone of omarchy.lock too; a sync
+  # would delete everything it has beyond stock.
+  foreign="$plugins/someone.lock-designs"
+  cp -r "$fake/shell/plugins/lock" "$foreign"
+  jq '.id = "someone.lock-designs" | .omarchy.clonedFrom = "omarchy.lock"' "$fake/shell/plugins/lock/manifest.json" > "$foreign/manifest.json"
+  mkdir -p "$foreign/.git" "$foreign/designs"; echo "// mine" > "$foreign/designs/Mine.qml"
+  cp "$lclone/LockView.qml" "$foreign/LockView.qml"
+  echo "// newer" >> "$fake/shell/plugins/lock/Service.qml"
+  hv python3 "$scripts/lock-screen" watchdog >/dev/null 2>&1
+  hv python3 "$scripts/lock-screen" install >/dev/null 2>&1
+  check "a git-installed lock plugin is never rebuilt" test -f "$foreign/designs/Mine.qml"
+  check "  (its Service.qml is left alone)"      test "$(tail -1 "$foreign/Service.qml")" != "// newer"
+  check "  (our own clone still syncs)"          test "$(tail -1 "$lclone/Service.qml")" = "// newer"
+  rm -rf "$foreign"
   rm "$H/lock-dead"; old_wrapper
   hv python3 "$scripts/lock-screen" install --heal >/dev/null 2>&1
   check "a running lock service is never restarted under" unhealed
