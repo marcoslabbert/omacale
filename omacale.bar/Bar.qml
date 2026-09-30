@@ -42,7 +42,7 @@ Item {
   readonly property bool capsLock: Sys.capsLock
   readonly property bool numLock: Sys.numLock
 
-  readonly property string version: manifest && manifest.version ? manifest.version : "0.41.0"
+  readonly property string version: manifest && manifest.version ? manifest.version : "0.42.0"
 
   signal toggleRequested(string name, string screenName, string arg)
 
@@ -66,13 +66,17 @@ Item {
   // exclusion list — the shell sets firstParty=true for every stock plugin
   // under /usr/share/omarchy/shell/plugins/.
   readonly property var collectedPlugins: {
-    if (!barConfig || !barConfig.layout) return []
+    const none = { all: [], left: [], center: [], right: [] }
+    if (!barConfig || !barConfig.layout) return none
     var reg = barWidgetRegistry
-    if (!reg || !reg.widgets) return []
+    if (!reg || !reg.widgets) return none
     // Create a binding dependency on the revision counter.
     void(reg.revision)
     var layout = barConfig.layout
     var collected = []
+    // The section of Omarchy's layout each widget sits in, for the bar's
+    // three plugin pills. A widget listed twice keeps its first place.
+    var bySection = { left: [], center: [], right: [] }
     var seen = {}
     var sections = ["left", "center", "right"]
     for (var s = 0; s < sections.length; s++) {
@@ -87,19 +91,29 @@ Item {
         if (meta && meta.firstParty) continue
         seen[id] = true
         collected.push(entry)
+        bySection[sections[s]].push(entry)
       }
     }
-    return collected
+    return { all: collected, left: bySection.left, center: bySection.center, right: bySection.right }
   }
   // The list the pill's Repeater uses, reassigned only when it really changes.
   // The registry bumps its revision for every (re)registration -- each plugin
   // on start, all of them on a plugin reload -- and a new array makes the
   // Repeater destroy and rebuild every widget, popups and state included.
+  // One per section too, each reassigned on its own, so a change in one
+  // section doesn't rebuild the widgets of the other two.
   property var thirdPartyPlugins: []
-  onCollectedPluginsChanged: {
-    var next = collectedPlugins
-    if (JSON.stringify(next) !== JSON.stringify(thirdPartyPlugins)) thirdPartyPlugins = next
+  property var pluginsLeft: []
+  property var pluginsCenter: []
+  property var pluginsRight: []
+  function syncPluginLists() {
+    const c = collectedPlugins
+    if (JSON.stringify(c.all) !== JSON.stringify(thirdPartyPlugins)) thirdPartyPlugins = c.all
+    if (JSON.stringify(c.left) !== JSON.stringify(pluginsLeft)) pluginsLeft = c.left
+    if (JSON.stringify(c.center) !== JSON.stringify(pluginsCenter)) pluginsCenter = c.center
+    if (JSON.stringify(c.right) !== JSON.stringify(pluginsRight)) pluginsRight = c.right
   }
+  onCollectedPluginsChanged: syncPluginLists()
 
   // Omarchy widgets draw their mark in Style.bar.iconCanvas (16px) with a
   // 13px glyph; Omacale's status icons are Material glyphs at iconSize.small
@@ -543,7 +557,7 @@ Item {
   onVisBlurChanged: applyDesktopBlur()
 
   Component.onCompleted: {
-    thirdPartyPlugins = collectedPlugins
+    syncPluginLists()
     if (blur) applyBlur()
     if (clockBlur || visBlur) applyDesktopBlur()
   }

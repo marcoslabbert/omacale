@@ -51,7 +51,7 @@ Item {
   // power never shrink, so they are never pushed off the bottom.
   readonly property real titleMin: cfg.activeWindow.enabled ? Tk.barInner * 3 : Tk.barInner
   readonly property real fixedLen: {
-    const rows = [logoRow, workspaces, titleArea, pluginPlace, trayPill, clockPill, statusPill, powerItem]
+    const rows = [logoRow, workspaces, titleArea, pluginPlaceL, pluginPlaceC, pluginPlaceR, trayPill, clockPill, statusPill, powerItem]
     const n = rows.filter(r => r.visible).length
     return (logoRow.visible ? along(logoRow) : 0) + workspaces.bareSize
       + along(clockPill) - (calIconShown ? calendarLen : 0)
@@ -59,7 +59,8 @@ Item {
       + gap * Math.max(0, n - 1)
   }
   readonly property real flexRoom: alen(col) - fixedLen - titleMin
-  readonly property real flexMin: (trayPill.visible ? trayPill.collapsedLen : 0) + (pluginPlace.visible ? pluginPill.minLen : 0)
+  readonly property real flexMin: (trayPill.visible ? trayPill.collapsedLen : 0)
+    + pluginPills.reduce((n, p) => n + (p.live ? p.minLen : 0), 0)
   // Both worked out whether or not they are shown, so hiding one can't
   // bring it straight back.
   readonly property real calendarLen: cfg.clock.showIcon ? (vertical ? calIcon.implicitHeight + clockCol.spacing : calIconH.implicitWidth + clockRow.spacing) : 0
@@ -74,8 +75,30 @@ Item {
   Connections { target: workspaces; function onIconsSizeChanged() { Qt.callLater(root.refitCalendar) } }
   readonly property bool windowIconsFit: flexRoom - flexMin - (calendarFits ? calendarLen : 0) >= workspaces.iconsSize
   readonly property real budget: Math.max(0, flexRoom - (calendarFits ? calendarLen : 0) - (windowIconsFit ? workspaces.iconsSize : 0))
-  readonly property bool trayOverBudget: trayPill.visible && trayPill.fullLen + pluginPill.collapsedLen > budget
+  readonly property bool trayOverBudget: trayPill.visible
+    && trayPill.fullLen + pluginPills.reduce((n, p) => n + (p.live ? p.collapsedLen : 0), 0) > budget
   readonly property real trayReserve: !trayPill.visible ? 0 : trayPill.compact ? trayPill.collapsedLen : trayPill.fullLen
+
+  // The three plugin pills (one per section of Omarchy's bar layout) share
+  // what the tray leaves of the budget: each short enough to fit whole gets
+  // its full length, and the rest split what remains, so one crowded
+  // section scrolls on its own instead of squeezing the other two.
+  readonly property var pluginPills: [pluginPillL, pluginPillC, pluginPillR]
+  readonly property var pillCaps: {
+    const ps = pluginPills
+    let rem = Math.max(0, budget - trayReserve)
+    const caps = [0, 0, 0]
+    const order = [0, 1, 2].filter(i => ps[i].live).sort((a, b) => ps[a].listLen - ps[b].listLen)
+    let k = order.length
+    for (const i of order) {
+      caps[i] = Math.max(ps[i].minLen, Math.min(ps[i].listLen, rem / k))
+      rem -= caps[i]
+      k--
+    }
+    return caps
+  }
+  readonly property real pluginsLen: pluginPills.reduce((n, p) => n + along(p), 0)
+  readonly property Item colItem: col
 
   // Popout lookup for a position `a` along the bar (Caelestia Bar.checkPopout).
   function popoutAt(a) {
@@ -126,12 +149,14 @@ Item {
       add(ws, () => root.scope.switchWorkspace(ws.wsId), { kind: "workspace", wsId: ws.wsId })
     if (activeWin.visible && Sys.activeToplevel)
       add(activeWin, () => root.scope.openPopoutKeys("activewindow"))
-    if (pluginPill.visible && pluginPill.anyShown)
-      for (let i = 0; i < pluginRep.count; i++) {
-        const slot = pluginRep.itemAt(i)
+    for (const pill of pluginPills) {
+      if (!pill.live) continue
+      for (let i = 0; i < pill.rep.count; i++) {
+        const slot = pill.rep.itemAt(i)
         if (slot && slot.shown && slot.activeItem)
-          out.push({ item: slot, kind: "plugin", act: () => root.openPlugin(slot) })
+          out.push({ item: slot, kind: "plugin", pill: pill, act: () => root.openPlugin(slot) })
       }
+    }
     if (trayPill.visible)
       for (let i = 0; i < trayRep.count; i++) {
         const it = trayRep.itemAt(i)
@@ -159,9 +184,11 @@ Item {
     const inTray = !!s && s.kind === "tray"
     if (inTray) { collapseTrayTimer.stop(); if (trayPill.compact) trayPill.expanded = true }
     else if (trayPill.expanded) collapseTrayTimer.restart()
-    const inPlugins = !!s && s.kind === "plugin"
-    if (inPlugins) { collapsePluginsTimer.stop(); if (pluginPill.overflowCount > 0) pluginPill.expanded = true }
-    else if (pluginPill.expanded) collapsePluginsTimer.restart()
+    const inPill = !!s && s.kind === "plugin" ? s.pill : null
+    for (const pill of pluginPills) {
+      if (pill === inPill) pill.holdOpen()
+      else pill.collapseLater()
+    }
   }
   function stepStop(d) {
     const stops = navStops()
@@ -240,7 +267,7 @@ Item {
     // Where the target is now; re-read when anything above it moves.
     readonly property rect r: {
       void (col.y + col.x + titleArea.height + titleArea.width + trayPill.height + trayPill.width
-        + pluginPill.height + pluginPill.width + statusPill.height + statusPill.width + workspaces.height + workspaces.width)
+        + root.pluginsLen + statusPill.height + statusPill.width + workspaces.height + workspaces.width)
       if (!target) return Qt.rect(0, 0, 0, 0)
       const p = target.mapToItem(root, 0, 0)
       return Qt.rect(p.x, p.y, target.width, target.height)
@@ -317,7 +344,7 @@ Item {
   // handler inside the bar is no good: leaving the layer surface altogether
   // never reaches it, and the group would stay open.
   // Open while the pointer is on the group; ScreenScope drives this.
-  readonly property bool groupsExpanded: trayPill.expanded || pluginPill.expanded
+  readonly property bool groupsExpanded: trayPill.expanded || pluginPills.some(p => p.expanded)
 
   function hoverAt(a, onBar) {
     const t = pointAlong(pointOn(trayPill, a))
@@ -326,16 +353,16 @@ Item {
       if (trayPill.compact) trayPill.expanded = true
     } else if (trayPill.expanded && !collapseTrayTimer.running) collapseTrayTimer.start()
 
-    const p = pointAlong(pointOn(pluginPill, a))
-    if (onBar && pluginPill.visible && p >= 0 && p <= alen(pluginPill)) {
-      collapsePluginsTimer.stop()
-      if (pluginPill.overflowCount > 0) pluginPill.expanded = true
-    } else if (pluginPill.expanded && !collapsePluginsTimer.running) collapsePluginsTimer.start()
+    for (const pill of pluginPills) {
+      const p = pointAlong(pointOn(pill, a))
+      if (onBar && pill.visible && p >= 0 && p <= alen(pill)) pill.holdOpen()
+      else pill.collapseSoon()
+    }
   }
 
   // The drawers' MouseArea takes every wheel over the bar, so a capped tray
   // never sees one and is scrolled from here (the plugin pill has its own
-  // wheel catcher, see pluginPill).
+  // wheel catcher, see PluginPill).
   function scrollList(flick, a, dy) {
     const p = pointAlong(pointOn(flick, a))
     if (!flick.visible || !flick.interactive || p < 0 || p > alen(flick)) return false
@@ -495,18 +522,33 @@ Item {
       }
     }
 
-    // --------------------------------------------------- plugins pill
-    // Holds the plugins pill's place in the column; the pill is drawn outside
-    // the layout (see pluginPill below). Hiding a parent of a widget makes the
-    // widget itself report visible=false, so a pill hidden because every
-    // widget had hidden itself could never come back. Hiding this empty
-    // placeholder instead also lets the layout drop its spacing.
+    // --------------------------------------------------- plugins pills
+    // Hold the plugin pills' places in the column, one per section of
+    // Omarchy's bar layout; the pills are drawn outside the layout (see
+    // PluginPill below). Hiding a parent of a widget makes the widget itself
+    // report visible=false, so a pill hidden because every widget had hidden
+    // itself could never come back. Hiding these empty placeholders instead
+    // also lets the layout drop their spacing.
     Item {
-      id: pluginPlace
+      id: pluginPlaceL
       Layout.alignment: root.crossAlign
-      implicitWidth: root.vertical ? Tk.barInner : pluginPill.implicitWidth
-      implicitHeight: root.vertical ? pluginPill.implicitHeight : Tk.barInner
-      visible: pluginPill.visible && pluginPill.anyShown
+      implicitWidth: root.vertical ? Tk.barInner : pluginPillL.implicitWidth
+      implicitHeight: root.vertical ? pluginPillL.implicitHeight : Tk.barInner
+      visible: pluginPillL.live
+    }
+    Item {
+      id: pluginPlaceC
+      Layout.alignment: root.crossAlign
+      implicitWidth: root.vertical ? Tk.barInner : pluginPillC.implicitWidth
+      implicitHeight: root.vertical ? pluginPillC.implicitHeight : Tk.barInner
+      visible: pluginPillC.live
+    }
+    Item {
+      id: pluginPlaceR
+      Layout.alignment: root.crossAlign
+      implicitWidth: root.vertical ? Tk.barInner : pluginPillR.implicitWidth
+      implicitHeight: root.vertical ? pluginPillR.implicitHeight : Tk.barInner
+      visible: pluginPillR.live
     }
 
     // ---------------------------------------------------------- tray
@@ -539,7 +581,7 @@ Item {
         if (!compact) return fullLen
         if (!expanded) return collapsedLen
         return Math.max(collapsedLen, Math.min(chevronLen + listLen + spacingN + (bg ? Tk.padding.extraSmall : 0) + padding,
-          root.budget - root.along(pluginPill)))
+          root.budget - root.pluginsLen))
       }
       implicitWidth: root.vertical ? Tk.barInner : sizeLen
       implicitHeight: root.vertical ? sizeLen : Tk.barInner
@@ -1049,152 +1091,9 @@ Item {
     }
   }
 
-  // Dedicated Caelestia pill for 3rd-party bar widgets (installed in
-  // ~/.config/omarchy/plugins/), laid out like the status pill: same padding,
-  // same spacing, one status-icon cell per widget (BarWidgetSlot scales each
-  // widget's mark to the status icons' size). Sits on pluginPlace.
-  //
-  // Pinned widgets (Settings › Taskbar › Plugins) always show; the others
-  // wait behind a chevron that hovering expands, like the compact tray.
-  Rectangle {
-    id: pluginPill
-    readonly property var pluginsList: root.host.thirdPartyPlugins || []
-    readonly property var unpinned: root.cfg.plugins.unpinned
-    // The padding at each end of the list, along the bar.
-    readonly property real endPad: Tk.padding.medium
-    readonly property real listLen: root.vertical ? pluginCol.implicitHeight : pluginCol.implicitWidth
-    readonly property bool anyShown: listLen - endPad * 2 > 0.5
-    property bool expanded: false
-    onOverflowCountChanged: if (overflowCount === 0) expanded = false
-
-    // Counted by hand: Repeater.itemAt is not a binding dependency, so every
-    // slot asks for a recount when its size, content or pin changes.
-    property int overflowCount: 0
-    property real pinnedLen: 0
-    function recount() { countTimer.restart() }
-    Timer {
-      id: countTimer
-      interval: 0
-      onTriggered: {
-        let n = 0, h = 0
-        for (let i = 0; i < pluginRep.count; i++) {
-          const slot = pluginRep.itemAt(i)
-          if (!slot || !slot.shown) continue
-          if (slot.pinned) h += Math.round(slot.visualLen) + pluginCol.gapPx
-          else n++
-        }
-        pluginPill.overflowCount = n
-        pluginPill.pinnedLen = h
-      }
-    }
-    // The pill's size along the bar with the overflow closed: what the budget plans for.
-    readonly property real collapsedLen: overflowCount === 0 && pinnedLen === 0 ? 0
-      : endPad * 2 + pinnedLen
-        + (overflowCount > 0 ? (root.vertical ? overflowIcon.implicitHeight : overflowIcon.implicitWidth) : -pluginCol.gapPx)
-
-    visible: root.cfg.plugins.enabled !== false && pluginsList.length > 0
-    opacity: anyShown ? 1 : 0
-    x: col.x + pluginPlace.x
-    y: col.y + pluginPlace.y
-    // Scrolled down to a single cell, pinned widgets included, when even they
-    // don't fit: the pill gives way before the clock and status icons do.
-    readonly property real minLen: endPad * 2 + (root.vertical ? cellRef.implicitHeight : cellRef.implicitWidth)
-    // Capped by the space budget, leaving the tray its (collapsed) share.
-    readonly property real sizeLen: anyShown ? Math.min(Math.max(minLen, root.budget - root.trayReserve), listLen) : 0
-    implicitWidth: root.vertical ? Tk.barInner : sizeLen
-    implicitHeight: root.vertical ? sizeLen : Tk.barInner
-    width: implicitWidth
-    height: implicitHeight
-    radius: (root.vertical ? width : height) / 2
-    color: Colours.m3surfaceContainer
-    clip: true
-
-    Behavior on implicitHeight { enabled: root.vertical; Anim {} }
-    Behavior on implicitWidth { enabled: !root.vertical; Anim {} }
-
-    Timer {
-      id: collapsePluginsTimer
-      interval: 400
-      onTriggered: pluginPill.expanded = false
-    }
-
-    // A status icon's height, so a plugin cell matches the status pill's.
-    MIcon { id: cellRef; visible: false; text: "extension" }
-
-    // More widgets than fit scroll rather than being cut off.
-    MFlickable {
-      id: pluginFlick
-      anchors.fill: parent
-      contentWidth: root.vertical ? width : pluginCol.implicitWidth
-      contentHeight: root.vertical ? pluginCol.implicitHeight : height
-      interactive: root.vertical ? contentHeight > height + 0.5 : contentWidth > width + 0.5
-
-      Grid {
-        id: pluginCol
-        readonly property real gapPx: Tk.spacing.medium / 2
-        width: root.vertical ? parent.width : implicitWidth
-        height: root.vertical ? implicitHeight : parent.height
-        columns: root.vertical ? 1 : 1000
-        topPadding: root.vertical ? pluginPill.endPad : 0
-        bottomPadding: root.vertical ? pluginPill.endPad : 0
-        leftPadding: root.vertical ? 0 : pluginPill.endPad
-        rightPadding: root.vertical ? 0 : pluginPill.endPad
-        spacing: gapPx
-
-        Repeater {
-          id: pluginRep
-          model: pluginPill.pluginsList
-
-          BarWidgetSlot {
-            required property var modelData
-            pinned: pluginPill.unpinned.indexOf(moduleName) < 0
-            entry: modelData
-            host: root.host
-            vertical: root.vertical
-            cellLen: root.vertical ? cellRef.implicitHeight : cellRef.implicitWidth
-            collapsed: !pinned && !pluginPill.expanded
-            onShownChanged: pluginPill.recount()
-            onPinnedChanged: pluginPill.recount()
-            onVisualLenChanged: pluginPill.recount()
-            Component.onCompleted: pluginPill.recount()
-            Component.onDestruction: pluginPill.recount()
-          }
-        }
-
-        // Caelestia's tray chevron, for the widgets that aren't pinned.
-        Item {
-          width: root.vertical ? parent.width : (pluginPill.overflowCount > 0 ? overflowIcon.implicitWidth : 0)
-          height: root.vertical ? (pluginPill.overflowCount > 0 ? overflowIcon.implicitHeight : 0) : parent.height
-          MIcon {
-            id: overflowIcon
-            anchors.centerIn: parent
-            visible: pluginPill.overflowCount > 0
-            text: root.vertical ? "expand_less" : "chevron_left"
-            size: Tk.iconSize.medium
-            color: Colours.m3onSurfaceVariant
-            rotation: pluginPill.expanded ? 180 : 0
-            Behavior on rotation { Anim {} }
-          }
-          MouseArea {
-            anchors.fill: parent
-            enabled: pluginPill.overflowCount > 0
-            cursorShape: Qt.PointingHandCursor
-            onClicked: { collapsePluginsTimer.stop(); pluginPill.expanded = !pluginPill.expanded }
-          }
-        }
-      }
-    }
-
-    // Omarchy's WidgetButton takes every wheel, so hosted widgets would eat
-    // the scroll of an overfull pill. Wheel only: clicks and hover go through,
-    // and while the pill fits the wheel is left to the widget.
-    MouseArea {
-      anchors.fill: parent
-      acceptedButtons: Qt.NoButton
-      onWheel: e => {
-        if (!pluginFlick.interactive) { e.accepted = false; return }
-        root.scrollBy(pluginFlick, e.angleDelta.y)
-      }
-    }
-  }
+  // Your 3rd-party bar widgets, in the three sections Omarchy's bar layout
+  // puts them in (shell.json bar.layout left / center / right).
+  PluginPill { id: pluginPillL; bar: root; place: pluginPlaceL; pluginsList: root.host.pluginsLeft || []; capLen: root.pillCaps[0] }
+  PluginPill { id: pluginPillC; bar: root; place: pluginPlaceC; pluginsList: root.host.pluginsCenter || []; capLen: root.pillCaps[1] }
+  PluginPill { id: pluginPillR; bar: root; place: pluginPlaceR; pluginsList: root.host.pluginsRight || []; capLen: root.pillCaps[2] }
 }
