@@ -56,8 +56,50 @@ Item {
   // ("menu") or the clipboard ("clipboard"), e.g. from IPC.
   function openMode(kind) {
     const text = kind === "menu" ? menuPrefix : prefix + kind + " "
-    if (active) { search.text = text; search.forceActiveFocus() }
+    if (shown) { search.text = text; search.forceActiveFocus() }
     else pendingText = text
+  }
+
+  // Open onto a submenu by Omarchy's route (IPC `menuAt`), as
+  // `omarchy-menu toggle <route>` does. A route is an id or an alias of one,
+  // which only resolves once the menu engine has its items, so it waits for
+  // MenuService.ready.
+  property string pendingRoute: ""
+  function openRoute(route) {
+    pendingRoute = route
+    if (!shown) { pendingText = menuPrefix; return }
+    search.text = menuPrefix
+    search.forceActiveFocus()
+    applyRoute()
+  }
+  function applyRoute() {
+    if (!pendingRoute || !MenuService.ready || !menuMode) return
+    const route = pendingRoute
+    pendingRoute = ""
+    menuStack = []
+    menuGo(MenuService.resolve(route), false)
+  }
+  Connections {
+    target: MenuService
+    function onReadyChanged() { root.applyRoute() }
+  }
+  // A new pick starts at its first row, whatever was selected before.
+  Connections {
+    target: SelectService
+    function onRequestChanged() {
+      if (!SelectService.active) return
+      list.currentIndex = 0
+      if (root.shown) root.pick = SelectService.request
+    }
+  }
+  // The pick this launcher is showing. Only that one is cancelled when it
+  // closes: a launcher still on its way out (drawers are destroyed after
+  // their exit animation) would otherwise cancel the next pick as it opens.
+  property var pick: null
+  property bool wasMenu: false
+  function dropPick() {
+    if (pick && SelectService.request === pick) SelectService.cancel()
+    pick = null
   }
 
   // ---------------------------------------------------------- Omarchy menu
@@ -155,6 +197,11 @@ Item {
 
   onModeChanged: {
     if (mode === "menu") { menuReset(); MenuService.open("root") }
+    // Typing out of the menu mode walks away from a pick, which ends it. Only
+    // a real change out of it: the first value of `mode` also arrives here,
+    // after opened() has already taken the pick.
+    else if (wasMenu) dropPick()
+    wasMenu = mode === "menu"
     clipConfirm = false
   }
 
@@ -177,7 +224,7 @@ Item {
   ]
 
   readonly property var results: {
-    if (menuMode) return MenuService.rows(menuPath, menuQuery)
+    if (menuMode) return SelectService.active ? SelectService.rows(menuQuery) : MenuService.rows(menuPath, menuQuery)
     if (calcMode) return [calcRow]
     if (clipMode) return ClipboardService.rows(query)
     const q = (actionMode ? search.text.slice(prefix.length) : search.text).trim().toLowerCase()
@@ -226,6 +273,8 @@ Item {
   // app row is launched, anything else runs its action.
   function activateMenuRow(row) {
     if (row.disabled) return
+    // A pick for whoever called Omarchy's picker (SelectService).
+    if (row.kind === "select") { SelectService.choose(row); root.dismissed(); return }
     if (row.kind === "menu" || row.kind === "link") { menuGo(row.target || row.itemId, true); return }
     if (row.kind === "app") {
       const entry = DesktopEntries.byId(row.appId)
@@ -251,13 +300,28 @@ Item {
 
   // Wallpapers.reload(): a reopened carousel keeps its old list otherwise,
   // since it is not recreated when the search text is unchanged.
-  function opened() { menuReset(); clipConfirm = false; search.text = pendingText; pendingText = ""; list.currentIndex = 0; Qt.callLater(() => search.forceActiveFocus()); Wallpapers.reload() }
+  // Set once opened() has run. A request arriving before that (the drawer is
+  // created by the same call that asks for a mode) is queued for opened(),
+  // which would otherwise reset it: `active` alone turns true too early.
+  property bool shown: false
+  function opened() {
+    shown = true
+    menuReset(); clipConfirm = false; search.text = pendingText; pendingText = ""; list.currentIndex = 0
+    // Taken after the text is reset: a launcher reopened on its way out still
+    // holds the last search, and clearing it out of the menu mode would
+    // otherwise cancel the pick it has just taken.
+    if (SelectService.active) pick = SelectService.request
+    applyRoute()
+    Qt.callLater(() => search.forceActiveFocus()); Wallpapers.reload()
+  }
+  // A pick left open when the launcher goes is a cancelled one; its caller
+  // is waiting on the answer.
   onActiveChanged: {
     if (active) opened()
-    else Wallpapers.stopPreview()
+    else { shown = false; Wallpapers.stopPreview(); dropPick() }
     disarmPointer()
   }
-  Component.onDestruction: Wallpapers.stopPreview()
+  Component.onDestruction: { Wallpapers.stopPreview(); dropPick() }
 
   // One cursor for mouse and keys, as Omarchy's launcher/clipboard: hovering a
   // row moves currentIndex there, and the keys carry on from it. Only real
@@ -700,7 +764,8 @@ Item {
     // search bar, in front of what is being typed. Clicking it steps back out.
     Rectangle {
       id: crumb
-      readonly property bool shown: root.menuMode && root.menuPath !== "root"
+      // A pick shows its prompt there instead (SelectService).
+      readonly property bool shown: root.menuMode && (SelectService.active ? SelectService.prompt !== "" : root.menuPath !== "root")
       visible: shown
       anchors.left: searchIcon.right
       anchors.leftMargin: Tk.spacing.medium
@@ -712,7 +777,7 @@ Item {
       MText {
         id: crumbText
         anchors.centerIn: parent
-        text: MenuService.pathLabel(root.menuPath)
+        text: SelectService.active ? SelectService.prompt : MenuService.pathLabel(root.menuPath)
         color: Colours.m3onSecondaryContainer
         font.pointSize: Tk.label.large
         weight: Font.Medium

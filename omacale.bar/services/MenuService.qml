@@ -46,8 +46,12 @@ QtObject {
   property var providersLoaded: ({})
   property int providerRevision: 0
 
+  // Menu actions that ask Omarchy's picker something (the timezone, a web
+  // app to remove, ...) get Omacale's picker (scripts/picker), as the menu
+  // they came from is Omacale's. After the login profile, which sets PATH.
+  readonly property string pickerDir: String(Qt.resolvedUrl("../scripts/picker")).replace(/^file:\/\//, "")
   function run(action) {
-    if (action) Quickshell.execDetached(["bash", "-lc", String(action)])
+    if (action) Quickshell.execDetached(["bash", "-lc", "PATH=" + quote(pickerDir) + ":$PATH; " + String(action)])
   }
 
   function quote(value) {

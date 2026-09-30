@@ -146,3 +146,4 @@ VisualiserBars 1.0 modules/background/VisualiserBars.qml
 ClipboardItem 1.0 modules/launcher/ClipboardItem.qml
 ClipboardPreview 1.0 modules/launcher/ClipboardPreview.qml
 singleton ClipboardService 1.0 services/ClipboardService.qml
+singleton SelectService 1.0 services/SelectService.qml

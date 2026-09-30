@@ -42,7 +42,7 @@ Item {
   readonly property bool capsLock: Sys.capsLock
   readonly property bool numLock: Sys.numLock
 
-  readonly property string version: manifest && manifest.version ? manifest.version : "0.40.0"
+  readonly property string version: manifest && manifest.version ? manifest.version : "0.41.0"
 
   signal toggleRequested(string name, string screenName, string arg)
 
@@ -465,6 +465,18 @@ Item {
     }
     // The Omarchy menu, walked inside the launcher (the ":" prefix).
     function menu(): void { root.toggle("launcher", "menu") }
+    // Straight onto a submenu of it by Omarchy's route ("capture", "system",
+    // ...), as `omarchy-menu toggle <route>`; again closes it.
+    function menuAt(route: string): void { root.toggle("launcher", "menu:" + route) }
+    // Omarchy's picker (scripts/picker/omarchy-menu-select), drawn by the
+    // launcher. "ok" once it is showing; anything else and the caller falls
+    // back to Omarchy's own.
+    function select(payload: string): string {
+      if (!Config.o.launcher.enabled) return "disabled"
+      if (!SelectService.begin(payload)) return "invalid"
+      root.toggle("launcher", "select")
+      return "ok"
+    }
     // Omarchy's clipboard history, in the launcher (">clipboard ").
     function clipboard(): void { root.toggle("launcher", "clipboard") }
     // UI scale: "omarchy" follows shell.toml, a number (0.5-2) sets a custom

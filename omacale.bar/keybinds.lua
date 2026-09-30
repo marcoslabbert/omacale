@@ -64,5 +64,17 @@ o.bind("SUPER + CTRL + code:19", "Omacale bar focus", "omarchy-shell omacale bar
 -- o.rebind("SUPER + TAB", "Omacale workspace overview", "omarchy-shell omacale overview")                -- was: Next workspace
 -- Clipboard history in the launcher. Omarchy's clipboard plugin keeps recording it either way.
 -- o.rebind("SUPER + CTRL + V", "Omacale clipboard", "omarchy-shell omacale clipboard")                    -- was: Clipboard manager
+-- The rest of Omarchy's menus, drawn by Omacale: submenus by their route
+-- (`menuAt`, as `omarchy-menu toggle <route>`), the apps list as the
+-- launcher, and notification history as the sidebar.
+-- o.rebind("SUPER + ALT + SPACE", "Omacale launcher", "omarchy-shell omacale launcher")                  -- was: Apps menu
+-- o.rebind("SUPER + SHIFT + code:201", "Omacale menu", "omarchy-shell omacale menu")                     -- was: Omarchy menu
+-- o.rebind("SUPER + CTRL + C", "Omacale capture menu", "omarchy-shell omacale menuAt capture")            -- was: Capture menu
+-- o.rebind("SUPER + CTRL + O", "Omacale toggle menu", "omarchy-shell omacale menuAt toggle")             -- was: Toggle menu
+-- o.rebind("SUPER + CTRL + H", "Omacale hardware menu", "omarchy-shell omacale menuAt hardware")         -- was: Hardware menu
+-- o.rebind("SUPER + SHIFT + ALT + comma", "Omacale notification history", "omarchy-shell omacale sidebar") -- was: Open notification history
+-- Omarchy's keybindings list (its list, its dispatch), with the pick drawn by
+-- Omacale's launcher: scripts/pick runs any Omarchy command that way.
+-- o.rebind("SUPER + K", "Omacale keybindings", os.getenv("HOME") .. "/.config/omarchy/plugins/omacale.bar/scripts/pick omarchy-menu-keybindings") -- was: Keybindings
 -- Details and actions for the focused window (also the chevron in the bar's active-window popout).
 -- o.bind("SUPER + ALT + I", "Omacale window info", "omarchy-shell omacale windowInfo")

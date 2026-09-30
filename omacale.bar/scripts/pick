@@ -1,0 +1,7 @@
+#!/bin/bash
+# Run an Omarchy command with its picker drawn by Omacale's launcher, e.g.
+#   pick omarchy-menu-keybindings        (what keybinds.lua binds to SUPER+K)
+# Omarchy still builds the list and acts on the pick; only
+# omarchy-menu-select is Omacale's (scripts/picker/).
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+PATH="$here/picker:$PATH" exec "$@"

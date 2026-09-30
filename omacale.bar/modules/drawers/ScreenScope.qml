@@ -236,7 +236,19 @@ Scope {
         else { scope.popoutCenter = scope.barVert ? scope.screen.height / 2 : scope.screen.width / 2; scope.popout = "winfo" }
         return
       }
-      if (name === "launcher" && scope.cfg.launcher.enabled) {
+      if (name === "launcher" && scope.cfg.launcher.enabled && arg === "select") {
+        // A pick always opens (or stays open) onto its rows.
+        scope.launcher = true
+        launch.openMode("menu")
+      }
+      else if (name === "launcher" && scope.cfg.launcher.enabled && arg.startsWith("menu:")) {
+        // A submenu by route, closing only if that submenu is what shows.
+        const route = arg.slice(5)
+        if (scope.launcher && launch && launch.menuMode && !SelectService.active
+            && launch.menuPath === MenuService.resolve(route)) scope.launcher = false
+        else { scope.launcher = true; launch.openRoute(route) }
+      }
+      else if (name === "launcher" && scope.cfg.launcher.enabled) {
         // With a mode ("wallpaper" / "theme" / "menu" / "clipboard") it opens
         // onto it, and only closes if that mode is already showing.
         const mode = arg === "wallpaper" ? "wallpapers" : arg === "theme" ? "themes" : arg === "menu" ? "menu" : arg === "clipboard" ? "clipboard" : ""

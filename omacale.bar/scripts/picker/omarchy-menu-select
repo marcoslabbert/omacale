@@ -1,0 +1,61 @@
+#!/bin/bash
+# Omacale's stand-in for Omarchy's omarchy-menu-select, first on PATH only
+# for what Omacale runs (scripts/pick, the launcher's Omarchy menu). Same
+# arguments and output; the pick is drawn by the launcher (SelectService)
+# instead of Omarchy's menu plugin, which it is otherwise summoned into the
+# same way. Omarchy has no setting for which UI draws its picker, hence the
+# shadow. When Omacale isn't answering, Omarchy's own picker takes over.
+
+set -euo pipefail
+
+real="${OMARCHY_PATH:-/usr/share/omarchy}/bin/omarchy-menu-select"
+
+if (( $# < 1 )); then
+  exec "$real" "$@"
+fi
+
+prompt="$1"
+shift
+options=()
+menu_args=()
+while (( $# > 0 )); do
+  if [[ $1 == "--" ]]; then
+    shift
+    menu_args=("$@")
+    break
+  fi
+  options+=("$1")
+  shift
+done
+if (( ${#options[@]} == 0 )) && [[ ! -t 0 ]]; then
+  mapfile -t options
+fi
+(( ${#options[@]} > 0 )) || exec "$real" "$prompt"
+
+selection_file=$(mktemp)
+done_file=$(mktemp)
+rm -f "$done_file"
+trap 'rm -f "$selection_file" "$done_file"' EXIT
+
+payload=$(perl -MEncode=decode -MJSON::PP=encode_json -e '
+  my ($prompt, $sel, $done, @opts) = @ARGV;
+  print encode_json({
+    prompt => decode("UTF-8", $prompt),
+    options => [map { decode("UTF-8", $_) } @opts],
+    selectionFile => $sel,
+    doneFile => $done
+  })' "$prompt" "$selection_file" "$done_file" "${options[@]}")
+
+if [[ $(omarchy-shell omacale select "$payload" 2>/dev/null) != "ok" ]]; then
+  exec "$real" "$prompt" "${options[@]}" -- "${menu_args[@]}"
+fi
+
+while [[ ! -e $done_file ]]; do
+  sleep 0.05
+done
+
+if [[ -s $selection_file ]]; then
+  cat "$selection_file"
+else
+  exit 1
+fi
