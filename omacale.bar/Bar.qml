@@ -42,7 +42,7 @@ Item {
   readonly property bool capsLock: Sys.capsLock
   readonly property bool numLock: Sys.numLock
 
-  readonly property string version: manifest && manifest.version ? manifest.version : "0.45.0"
+  readonly property string version: manifest && manifest.version ? manifest.version : "0.45.1"
 
   signal toggleRequested(string name, string screenName, string arg)
 
@@ -335,10 +335,25 @@ Item {
     property var instances: ({})
   }
 
+  // Set once the shell starts exiting. Teardown destroys the real services and
+  // our copies, and the widgets still bound to serviceFor() ask again: a copy
+  // built then registers its IpcHandler against the engine generation being
+  // destroyed, and Quickshell segfaults (IpcHandler::updateRegistration). Its
+  // crash handler then relaunches a shell beside the one omarchy-restart-shell
+  // starts, which is what made every restart thrash.
+  property bool quitting: false
+  Connections {
+    target: Qt.application
+    function onAboutToQuit() { root.quitting = true }
+  }
+  Component.onDestruction: quitting = true
+
   function hostedServiceFor(pluginId) {
     var key = String(pluginId || "")
-    if (!key) return null
-    if (serviceStore.instances[key]) return serviceStore.instances[key]
+    if (!key || quitting) return null
+    // One copy per plugin, ever: once it has been destroyed the bar is going
+    // away, and a fresh one would be built on a dying engine.
+    if (key in serviceStore.instances) return serviceStore.instances[key] || null
 
     var reg = root.barWidgetRegistry
     var meta = reg && typeof reg.metadataFor === "function" ? reg.metadataFor(key) : null

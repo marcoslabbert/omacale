@@ -521,6 +521,9 @@ Item {
       old.destroy()
     }
     if (!comp || comp.status !== Component.Ready) return
+    // Teardown re-registers components; a widget built then is built on a
+    // dying engine (see Bar.quitting).
+    if (host.quitting) return
     var item = null
     try {
       item = comp.createObject(stage, {
